@@ -22,10 +22,30 @@ export type GuessResult = {
 };
 
 export type ContextMessage = {
+  rawIndex: number;
   sender: string;
   text: string;
   timestamp: string;
   isTarget: boolean;
+};
+
+export type ContextBounds = {
+  startIndex: number;
+  endIndex: number;
+  hasMoreBefore: boolean;
+  hasMoreAfter: boolean;
+};
+
+export type ContextPageResult = {
+  context: ContextMessage[];
+  bounds: ContextBounds;
+};
+
+export type ContextPageOptions = {
+  before?: number;
+  after?: number;
+  startIndex?: number;
+  endIndex?: number;
 };
 
 type CachedDataset = ReturnType<typeof hydrateDataset>;
@@ -171,31 +191,83 @@ const getRawMessages = (): RawChatMessage[] => {
 };
 
 const DEFAULT_CONTEXT_WINDOW = 3;
+export const INITIAL_CONTEXT_BEFORE = 8;
+export const INITIAL_CONTEXT_AFTER = 8;
+export const CONTEXT_PAGE_SIZE = 10;
+export const MAX_CONTEXT_PAGE = 30;
 
-export const getMessageContext = (
+const clampPageSize = (value: number | undefined, fallback: number): number => {
+  if (value === undefined || Number.isNaN(value)) return fallback;
+  return Math.min(Math.max(Math.floor(value), 1), MAX_CONTEXT_PAGE);
+};
+
+const buildContextSlice = (
+  raw: RawChatMessage[],
+  targetRawIndex: number,
+  start: number,
+  end: number,
+): ContextMessage[] => {
+  const result: ContextMessage[] = [];
+  for (let i = start; i <= end; i++) {
+    const r = raw[i]!;
+    result.push({
+      rawIndex: i,
+      sender: r.sender,
+      text: r.text,
+      timestamp: r.timestamp,
+      isTarget: i === targetRawIndex,
+    });
+  }
+  return result;
+};
+
+export const getMessageContextPage = (
   roundId: string,
-  windowSize: number = DEFAULT_CONTEXT_WINDOW,
-): ContextMessage[] | null => {
+  options: ContextPageOptions = {},
+): ContextPageResult | null => {
   const message = getDataset().byId.get(roundId);
   if (!message || message.rawIndex === undefined) return null;
 
   const raw = getRawMessages();
   if (raw.length === 0) return null;
 
-  const { rawIndex } = message;
-  const start = Math.max(0, rawIndex - windowSize);
-  const end = Math.min(raw.length - 1, rawIndex + windowSize);
+  const targetRawIndex = message.rawIndex;
+  const lastIndex = raw.length - 1;
 
-  const result: ContextMessage[] = [];
-  for (let i = start; i <= end; i++) {
-    const r = raw[i]!;
-    result.push({
-      sender: r.sender,
-      text: r.text,
-      timestamp: r.timestamp,
-      isTarget: i === rawIndex,
-    });
+  let start: number;
+  let end: number;
+
+  if (options.endIndex !== undefined) {
+    const pageSize = clampPageSize(options.before, CONTEXT_PAGE_SIZE);
+    end = Math.max(0, options.endIndex);
+    start = Math.max(0, end - pageSize + 1);
+  } else if (options.startIndex !== undefined) {
+    const pageSize = clampPageSize(options.after, CONTEXT_PAGE_SIZE);
+    start = Math.min(lastIndex, options.startIndex + 1);
+    end = Math.min(lastIndex, options.startIndex + pageSize);
+    if (start > end) return { context: [], bounds: { startIndex: start, endIndex: end, hasMoreBefore: start > 0, hasMoreAfter: false } };
+  } else {
+    const before = clampPageSize(options.before, INITIAL_CONTEXT_BEFORE);
+    const after = clampPageSize(options.after, INITIAL_CONTEXT_AFTER);
+    start = Math.max(0, targetRawIndex - before);
+    end = Math.min(lastIndex, targetRawIndex + after);
   }
 
-  return result;
+  return {
+    context: buildContextSlice(raw, targetRawIndex, start, end),
+    bounds: {
+      startIndex: start,
+      endIndex: end,
+      hasMoreBefore: start > 0,
+      hasMoreAfter: end < lastIndex,
+    },
+  };
+};
+
+export const getMessageContext = (
+  roundId: string,
+  windowSize: number = DEFAULT_CONTEXT_WINDOW,
+): ContextMessage[] | null => {
+  const page = getMessageContextPage(roundId, { before: windowSize, after: windowSize });
+  return page?.context ?? null;
 };

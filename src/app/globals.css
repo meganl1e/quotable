@@ -18,78 +18,26 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
 }
 
-/* iMessage-style sent bubble — rounded body + curved tail at bottom-right */
+/* iMessage-style sent bubble */
 .bubble-sent {
   --bubble-color: #0a84ff;
-  --page-bg: #faf7f2;
   position: relative;
   background: var(--bubble-color);
   border-radius: 20px;
+  border-bottom-right-radius: 6px;
   color: white;
-  margin-right: 6px;
-  margin-bottom: 2px;
   overflow-wrap: break-word;
 }
 
-.bubble-sent::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  bottom: 0;
-  right: -7px;
-  width: 20px;
-  height: 20px;
-  background: var(--bubble-color);
-  border-bottom-left-radius: 15px 14px;
-}
-
-.bubble-sent::after {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  bottom: 0;
-  right: -26px;
-  width: 26px;
-  height: 20px;
-  background: var(--page-bg);
-  border-bottom-left-radius: 10px;
-}
-
-/* iMessage-style received bubble — curved tail at bottom-left */
+/* iMessage-style received bubble */
 .bubble-received {
   --bubble-color: #e9e9eb;
-  --page-bg: #faf7f2;
   position: relative;
   background: var(--bubble-color);
   border-radius: 20px;
+  border-bottom-left-radius: 6px;
   color: #1c1c1e;
-  margin-left: 6px;
-  margin-bottom: 2px;
   overflow-wrap: break-word;
-}
-
-.bubble-received::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  bottom: 0;
-  left: -7px;
-  width: 20px;
-  height: 20px;
-  background: var(--bubble-color);
-  border-bottom-right-radius: 15px 14px;
-}
-
-.bubble-received::after {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  bottom: 0;
-  left: -26px;
-  width: 26px;
-  height: 20px;
-  background: var(--page-bg);
-  border-bottom-right-radius: 10px;
 }
 
 /* iMessage-style bubble pop-in — subtle scale + fade from the tail */
@@ -145,4 +93,64 @@ body {
 
 .animate-hud-pulse {
   animation: hud-pulse 0.35s ease-out;
+}
+
+.bubble-target-highlight {
+  font-weight: 600;
+}
+
+.bubble-sent.bubble-target-highlight {
+  --bubble-color: #0070e0;
+  box-shadow: 0 2px 6px rgba(10, 132, 255, 0.28);
+}
+
+.bubble-received.bubble-target-highlight {
+  --bubble-color: #d8d8dc;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Stacked bubbles in a group — fully rounded, no tail corner */
+.bubble-stack.bubble-sent,
+.bubble-stack.bubble-received {
+  margin: 0;
+}
+
+.bubble-stack.bubble-sent::before,
+.bubble-stack.bubble-sent::after,
+.bubble-stack.bubble-received::before,
+.bubble-stack.bubble-received::after {
+  display: none;
+}
+
+.bubble-stack.bubble-received {
+  border-bottom-left-radius: 10px;
+}
+
+.bubble-stack.bubble-sent {
+  border-bottom-right-radius: 10px;
+}
+
+/* Bubble that follows another bubble in the same stack — softens the touching top corner */
+.bubble-stack-top.bubble-received {
+  border-top-left-radius: 10px;
+}
+
+.bubble-stack-top.bubble-sent {
+  border-top-right-radius: 10px;
+}
+
+.chat-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #c7c7cc transparent;
+}
+
+.chat-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-scroll::-webkit-scrollbar-thumb {
+  background: #c7c7cc;
+  border-radius: 999px;
 }

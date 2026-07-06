@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 type Round = {
   id: string;
@@ -8,6 +8,13 @@ type Round = {
 };
 
 type FeedbackState = "idle" | "correct" | "incorrect";
+
+type PlayedRound = {
+  round: Round;
+  result: "correct" | "incorrect";
+  correctSender: string;
+  timestamp: string;
+};
 
 type RoundResponse = {
   round: Round;
@@ -21,14 +28,56 @@ type GuessResponse = {
 };
 
 type ContextMessage = {
+  rawIndex: number;
   sender: string;
   text: string;
   timestamp: string;
   isTarget: boolean;
 };
 
-type ContextResponse = {
+type ContextBounds = {
+  startIndex: number;
+  endIndex: number;
+  hasMoreBefore: boolean;
+  hasMoreAfter: boolean;
+};
+
+type ContextPageResponse = {
   context: ContextMessage[];
+  bounds: ContextBounds;
+};
+
+const INITIAL_CONTEXT_BEFORE = 8;
+const INITIAL_CONTEXT_AFTER = 8;
+const CONTEXT_PAGE_SIZE = 10;
+
+const mergeContextMessages = (
+  existing: ContextMessage[],
+  incoming: ContextMessage[],
+): ContextMessage[] => {
+  const byIndex = new Map<number, ContextMessage>();
+  for (const message of [...existing, ...incoming]) {
+    byIndex.set(message.rawIndex, message);
+  }
+  return [...byIndex.values()].sort((a, b) => a.rawIndex - b.rawIndex);
+};
+
+type ContextMessageGroup = {
+  sender: string;
+  messages: ContextMessage[];
+};
+
+const groupConsecutiveBySender = (messages: ContextMessage[]): ContextMessageGroup[] => {
+  const groups: ContextMessageGroup[] = [];
+  for (const message of messages) {
+    const last = groups[groups.length - 1];
+    if (last && last.sender === message.sender) {
+      last.messages.push(message);
+    } else {
+      groups.push({ sender: message.sender, messages: [message] });
+    }
+  }
+  return groups;
 };
 
 const formatMessageTimestamp = (isoTimestamp: string): string => {
@@ -63,6 +112,38 @@ const SENDER_COLORS = [
 
 const SESSION_DOT_COUNT = 10;
 
+const CONTEXT_LOAD_BUTTON_CLASSES =
+  "inline-flex items-center justify-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-600 shadow-sm transition hover:bg-gray-50 hover:text-gray-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50";
+
+const ContextChevron = ({ direction }: { direction: "up" | "down" }) => (
+  <svg
+    aria-hidden
+    className="h-3 w-3 shrink-0 opacity-60"
+    viewBox="0 0 12 12"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {direction === "up" ? (
+      <path d="M2.5 8 6 4.5 9.5 8" />
+    ) : (
+      <path d="M2.5 4 6 7.5 9.5 4" />
+    )}
+  </svg>
+);
+
+const getFirstName = (fullName: string): string => fullName.split(" ")[0] ?? fullName;
+
+const getRevealText = (result: "correct" | "incorrect", correctSender: string): string =>
+  result === "correct"
+    ? `Yep, that was ${getFirstName(correctSender)}! ✅`
+    : `Nope, that was actually ${getFirstName(correctSender)} ❌`;
+
+const isBlueSender = (sender: string, blueSender: string | null): boolean =>
+  blueSender !== null && sender === blueSender;
+
 export default function Home() {
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
@@ -80,10 +161,18 @@ export default function Home() {
   const [scorePulse, setScorePulse] = useState(false);
   const [streakPulse, setStreakPulse] = useState(false);
   const [contextMessages, setContextMessages] = useState<ContextMessage[] | null>(null);
+  const [contextBounds, setContextBounds] = useState<ContextBounds | null>(null);
   const [isLoadingContext, setIsLoadingContext] = useState(false);
+  const [isLoadingEarlier, setIsLoadingEarlier] = useState(false);
+  const [isLoadingLater, setIsLoadingLater] = useState(false);
+  const [playedRounds, setPlayedRounds] = useState<PlayedRound[]>([]);
 
   const prevScoreRef = useRef(0);
   const prevStreakRef = useRef(0);
+  const contextScrollRef = useRef<HTMLDivElement>(null);
+  const targetBubbleRef = useRef<HTMLDivElement>(null);
+  const shouldAnchorTargetRef = useRef(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const hasValidSetup = senderOptions.length === 2 && currentRound !== null;
 
@@ -116,6 +205,34 @@ export default function Home() {
     return () => window.clearTimeout(t);
   }, [feedbackState]);
 
+  // Scroll to bottom when the answer reveal bubble appears
+  useEffect(() => {
+    if (feedbackState === "idle") return;
+    const t = window.setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [feedbackState]);
+
+  // Scroll to bottom instantly when a new round finishes loading after the first round
+  useEffect(() => {
+    if (isLoadingRound || playedRounds.length === 0) return;
+    requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoadingRound]);
+
+  // Scroll quoted message into view when context first opens
+  useEffect(() => {
+    if (contextMessages === null || !shouldAnchorTargetRef.current) return;
+    shouldAnchorTargetRef.current = false;
+    const t = window.setTimeout(() => {
+      targetBubbleRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, [contextMessages]);
+
   const loadRound = useCallback(async (excludeId?: string) => {
     setIsLoadingRound(true);
     setSetupError(null);
@@ -136,6 +253,7 @@ export default function Home() {
       setRevealedCorrectSender(null);
       setRevealedTimestamp(null);
       setContextMessages(null);
+      setContextBounds(null);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Could not load the game right now.";
@@ -202,11 +320,13 @@ export default function Home() {
 
     try {
       const response = await fetch(
-        `/api/game/context?roundId=${encodeURIComponent(currentRound.id)}`,
+        `/api/game/context?roundId=${encodeURIComponent(currentRound.id)}&before=${INITIAL_CONTEXT_BEFORE}&after=${INITIAL_CONTEXT_AFTER}`,
       );
-      const data = (await response.json()) as ContextResponse & { error?: string };
+      const data = (await response.json()) as ContextPageResponse & { error?: string };
       if (!response.ok) throw new Error(data.error ?? "Could not load context.");
+      shouldAnchorTargetRef.current = true;
       setContextMessages(data.context);
+      setContextBounds(data.bounds);
     } catch {
       // Silently ignore — context is a best-effort enhancement
     } finally {
@@ -214,8 +334,99 @@ export default function Home() {
     }
   };
 
+  const handleHideContext = () => {
+    setContextMessages(null);
+    setContextBounds(null);
+    if (contextScrollRef.current) {
+      contextScrollRef.current.scrollTop = 0;
+    }
+  };
+
+  const handleLoadEarlier = async () => {
+    if (!currentRound || !contextBounds || isLoadingEarlier || !contextBounds.hasMoreBefore) return;
+
+    const scrollEl = contextScrollRef.current;
+    const prevScrollHeight = scrollEl?.scrollHeight ?? 0;
+    setIsLoadingEarlier(true);
+
+    try {
+      const endIndex = contextBounds.startIndex - 1;
+      const response = await fetch(
+        `/api/game/context?roundId=${encodeURIComponent(currentRound.id)}&before=${CONTEXT_PAGE_SIZE}&endIndex=${endIndex}`,
+      );
+      const data = (await response.json()) as ContextPageResponse & { error?: string };
+      if (!response.ok) {
+        setContextBounds((prev) =>
+          prev ? { ...prev, hasMoreBefore: false } : prev,
+        );
+        return;
+      }
+
+      setContextMessages((prev) => mergeContextMessages(prev ?? [], data.context));
+      setContextBounds((prev) =>
+        prev
+          ? {
+              startIndex: data.bounds.startIndex,
+              endIndex: prev.endIndex,
+              hasMoreBefore: data.bounds.hasMoreBefore,
+              hasMoreAfter: prev.hasMoreAfter,
+            }
+          : data.bounds,
+      );
+
+      requestAnimationFrame(() => {
+        if (scrollEl) {
+          scrollEl.scrollTop += scrollEl.scrollHeight - prevScrollHeight;
+        }
+      });
+    } finally {
+      setIsLoadingEarlier(false);
+    }
+  };
+
+  const handleLoadLater = async () => {
+    if (!currentRound || !contextBounds || isLoadingLater || !contextBounds.hasMoreAfter) return;
+    setIsLoadingLater(true);
+
+    try {
+      const response = await fetch(
+        `/api/game/context?roundId=${encodeURIComponent(currentRound.id)}&after=${CONTEXT_PAGE_SIZE}&startIndex=${contextBounds.endIndex}`,
+      );
+      const data = (await response.json()) as ContextPageResponse & { error?: string };
+      if (!response.ok) {
+        setContextBounds((prev) =>
+          prev ? { ...prev, hasMoreAfter: false } : prev,
+        );
+        return;
+      }
+
+      setContextMessages((prev) => mergeContextMessages(prev ?? [], data.context));
+      setContextBounds((prev) =>
+        prev
+          ? {
+              startIndex: prev.startIndex,
+              endIndex: data.bounds.endIndex,
+              hasMoreBefore: prev.hasMoreBefore,
+              hasMoreAfter: data.bounds.hasMoreAfter,
+            }
+          : data.bounds,
+      );
+    } finally {
+      setIsLoadingLater(false);
+    }
+  };
+
   const handleNext = async () => {
-    if (!currentRound) return;
+    if (!currentRound || feedbackState === "idle") return;
+    setPlayedRounds((prev) => [
+      ...prev,
+      {
+        round: currentRound,
+        result: feedbackState,
+        correctSender: revealedCorrectSender ?? "",
+        timestamp: revealedTimestamp ?? "",
+      },
+    ]);
     await loadRound(currentRound.id);
   };
 
@@ -238,182 +449,264 @@ export default function Home() {
     return colors.dim;
   };
 
-  const revealText =
-    feedbackState === "correct"
-      ? `Yep, that was ${revealedCorrectSender ?? "them"}! ✅`
-      : `Nope, that was actually ${revealedCorrectSender ?? "Unknown"} ❌`;
+  const revealText = feedbackState !== "idle"
+    ? getRevealText(feedbackState, revealedCorrectSender ?? "")
+    : "";
+
+  const renderBubbleContent = (
+    key: string,
+    {
+      text,
+      isBlue,
+      isTarget = false,
+      showTail = true,
+      isStackTop = false,
+      timestamp,
+      showTimestamp = false,
+      bubbleRef,
+    }: {
+      text: string;
+      isBlue: boolean;
+      isTarget?: boolean;
+      showTail?: boolean;
+      isStackTop?: boolean;
+      timestamp?: string | null;
+      showTimestamp?: boolean;
+      bubbleRef?: RefObject<HTMLDivElement | null>;
+    },
+  ) => (
+    <div key={key} className={`flex flex-col ${isBlue ? "items-end" : "items-start"}`}>
+      <div
+        ref={isTarget ? bubbleRef : undefined}
+        className={`px-4 py-2 text-[13px] leading-snug ${isBlue ? "bubble-sent" : "bubble-received"} ${!showTail ? "bubble-stack" : ""} ${isStackTop ? "bubble-stack-top" : ""} ${isTarget ? "bubble-target-highlight" : ""}`}
+      >
+        {text}
+      </div>
+      {showTimestamp && timestamp && (
+        <p
+          className={`mt-1.5 text-[11px] font-medium text-gray-500 ${isBlue ? "pr-1 text-right" : "pl-1"}`}
+        >
+          {formatMessageTimestamp(timestamp)}
+        </p>
+      )}
+    </div>
+  );
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#FAF7F2] px-4 py-12">
-      <div className="flex min-h-[520px] w-full max-w-[360px] flex-col rounded-[2.5rem] border border-gray-200 bg-[#FAF7F2] shadow-sm">
-        <div className="flex flex-1 flex-col gap-5 px-6 pb-8 pt-8">
-
-          {/* Pill stat badge */}
-          <div className="flex justify-center">
-            <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-5 py-2 text-sm text-gray-500">
-              <span>
-                Score:{" "}
-                <span
-                  className={`font-semibold text-gray-700 inline-block ${scorePulse ? "animate-hud-pulse" : ""}`}
-                >
-                  {score}
-                </span>
+    <div className="flex min-h-screen items-center justify-center bg-[#FAF7F2] px-4 py-8">
+      <div className="flex h-[min(844px,calc(100svh-4rem))] w-full max-w-[390px] flex-col overflow-hidden rounded-[2.5rem] border border-gray-200 bg-[#FAF7F2] shadow-sm">
+        {/* Score badge */}
+        <div className="flex shrink-0 justify-center px-6 pb-3 pt-8">
+          <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-5 py-2 text-sm text-gray-500">
+            <span>
+              Score:{" "}
+              <span
+                className={`inline-block font-semibold text-gray-700 ${scorePulse ? "animate-hud-pulse" : ""}`}
+              >
+                {score}
               </span>
-              <span className="text-gray-300">·</span>
-              <span>
-                Streak:{" "}
-                <span
-                  className={`font-semibold text-gray-700 inline-block ${streakPulse ? "animate-hud-pulse" : ""}`}
-                >
-                  {streak}
-                </span>
+            </span>
+            <span className="text-gray-300">·</span>
+            <span>
+              Streak:{" "}
+              <span
+                className={`inline-block font-semibold text-gray-700 ${streakPulse ? "animate-hud-pulse" : ""}`}
+              >
+                {streak}
               </span>
-            </div>
+            </span>
           </div>
+        </div>
 
+        {/* Scrollable messages */}
+        <div
+          ref={contextScrollRef}
+          className="chat-scroll min-h-0 flex-1 overflow-y-auto px-6"
+        >
           {isLoadingRound ? (
-            <div className="flex h-40 items-center justify-center">
+            <div className="flex h-full min-h-[200px] items-center justify-center">
               <p className="text-sm text-gray-400">Loading...</p>
             </div>
           ) : !hasValidSetup ? (
-            <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+            <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-2 text-center">
               <p className="text-sm font-medium text-gray-600">Setup issue</p>
               <p className="text-xs text-gray-400">
                 {setupError ?? "Make sure filtered messages and senders are available."}
               </p>
             </div>
-          ) : (
-            <>
-              {/* Chat bubbles */}
-              <div className="flex min-h-[200px] flex-col gap-3 pt-2">
-                {/* Context messages — before the target */}
-                {contextMessages !== null && (
-                  <div className="flex flex-col gap-2 border-b border-gray-100 pb-3">
-                    {contextMessages
-                      .filter((m) => !m.isTarget)
-                      .slice(
-                        0,
-                        contextMessages.findIndex((m) => m.isTarget),
-                      )
-                      .map((m, i) => {
-                        const isFirst = senderOptions[0] === m.sender;
-                        return (
-                          <div
-                            key={`before-${i}`}
-                            className={`flex w-full ${isFirst ? "justify-end pr-1" : "justify-start pl-1"}`}
-                          >
-                            <div className="max-w-[78%]">
-                              <div
-                                className={`px-3 py-2 text-[13px] leading-snug ${
-                                  isFirst ? "bubble-sent" : "bubble-received"
-                                }`}
-                              >
-                                {m.text}
-                              </div>
-                              <p
-                                className={`mt-0.5 text-[10px] text-gray-400 ${isFirst ? "text-right pr-1" : "pl-1"}`}
-                              >
-                                {m.sender.split(" ")[0]}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-
-                {/* Sent bubble — right-aligned, blue */}
-                <div
-                  className={`flex w-full flex-col items-end pr-1 ${contextMessages !== null ? "ring-2 ring-blue-300 ring-offset-2 rounded-2xl" : ""}`}
-                >
-                  <div
-                    key={currentRound.id}
-                    className="animate-bubble-pop-right max-w-[82%]"
+          ) : contextMessages !== null ? (
+            <div className="flex flex-col gap-2.5 pb-2">
+              {contextBounds?.hasMoreBefore && (
+                <div className="flex justify-center py-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleLoadEarlier()}
+                    disabled={isLoadingEarlier}
+                    className={CONTEXT_LOAD_BUTTON_CLASSES}
                   >
-                    <div className="bubble-sent px-4 py-2.5 text-[15px] leading-relaxed">
-                      {currentRound.text}
+                    <ContextChevron direction="up" />
+                    {isLoadingEarlier ? "Loading…" : "Load earlier"}
+                  </button>
+                </div>
+              )}
+
+              {groupConsecutiveBySender(contextMessages).map((group, groupIndex) => {
+                const isBlue = isBlueSender(group.sender, revealedCorrectSender);
+                return (
+                  <div
+                    key={`group-${groupIndex}`}
+                    className={`flex w-full flex-col ${isBlue ? "items-end pr-2" : "items-start pl-2"}`}
+                  >
+                    <div
+                      className={`flex max-w-[78%] flex-col gap-[2px] ${isBlue ? "items-end" : "items-start"}`}
+                    >
+                      <p
+                        className={`mb-0.5 text-[11px] font-semibold text-gray-600 ${isBlue ? "pr-1 text-right" : "pl-1"}`}
+                      >
+                        {getFirstName(group.sender)}
+                      </p>
+                      {group.messages.map((m, i) =>
+                        renderBubbleContent(`ctx-${groupIndex}-${i}`, {
+                          text: m.isTarget ? currentRound!.text : m.text,
+                          isBlue,
+                          isTarget: m.isTarget,
+                          showTail: i === group.messages.length - 1,
+                          isStackTop: i > 0,
+                          timestamp: m.isTarget ? revealedTimestamp : undefined,
+                          showTimestamp: m.isTarget,
+                          bubbleRef: m.isTarget ? targetBubbleRef : undefined,
+                        }),
+                      )}
                     </div>
                   </div>
-                  {feedbackState !== "idle" && revealedTimestamp && (
-                    <p
-                      className={`mt-1.5 pr-1 text-[11px] text-gray-400 transition-all duration-300 ease-out ${
-                        revealVisible ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
-                      }`}
-                    >
-                      {formatMessageTimestamp(revealedTimestamp)}
-                    </p>
-                  )}
-                </div>
+                );
+              })}
 
-                {/* Reveal bubble — left-aligned, gray, pops in */}
-                {feedbackState !== "idle" && (
-                  <div className="flex w-full justify-start pl-1">
-                    <div className="animate-bubble-pop-left max-w-[82%]">
+              {contextBounds?.hasMoreAfter && (
+                <div className="flex justify-center py-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleLoadLater()}
+                    disabled={isLoadingLater}
+                    className={CONTEXT_LOAD_BUTTON_CLASSES}
+                  >
+                    {isLoadingLater ? "Loading…" : "Load later"}
+                    <ContextChevron direction="down" />
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 pt-2 pb-2">
+              {/* History — past answered rounds */}
+              {playedRounds.map((pr, i) => (
+                <div key={pr.round.id} className="flex flex-col gap-3">
+                  <div className="flex w-full flex-col items-end pr-1 opacity-70">
+                    <div className="max-w-[82%]">
+                      <div className="bubble-sent px-4 py-2.5 text-[15px] leading-relaxed">
+                        {pr.round.text}
+                      </div>
+                    </div>
+                    {pr.timestamp && (
+                      <p className="mt-1.5 pr-1 text-[11px] text-gray-400">
+                        {formatMessageTimestamp(pr.timestamp)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex w-full justify-start pl-1 opacity-70">
+                    <div className="max-w-[82%]">
                       <div className="bubble-received px-4 py-2.5 text-[15px] leading-relaxed">
-                        {revealText}
+                        {getRevealText(pr.result, pr.correctSender)}
                       </div>
                     </div>
                   </div>
-                )}
-
-                {/* Context messages — after the target */}
-                {contextMessages !== null && (
-                  <div className="flex flex-col gap-2 border-t border-gray-100 pt-3">
-                    {contextMessages
-                      .slice(contextMessages.findIndex((m) => m.isTarget) + 1)
-                      .map((m, i) => {
-                        const isFirst = senderOptions[0] === m.sender;
-                        return (
-                          <div
-                            key={`after-${i}`}
-                            className={`flex w-full ${isFirst ? "justify-end pr-1" : "justify-start pl-1"}`}
-                          >
-                            <div className="max-w-[78%]">
-                              <div
-                                className={`px-3 py-2 text-[13px] leading-snug ${
-                                  isFirst ? "bubble-sent" : "bubble-received"
-                                }`}
-                              >
-                                {m.text}
-                              </div>
-                              <p
-                                className={`mt-0.5 text-[10px] text-gray-400 ${isFirst ? "text-right pr-1" : "pl-1"}`}
-                              >
-                                {m.sender.split(" ")[0]}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
+                  {/* Round divider */}
+                  <div className="flex items-center gap-3 py-1">
+                    <div className="h-px flex-1 bg-gray-200" />
+                    <span className="text-[11px] text-gray-400">Round {i + 2}</span>
+                    <div className="h-px flex-1 bg-gray-200" />
                   </div>
+                </div>
+              ))}
+
+              {/* Active round */}
+              <div className="flex w-full flex-col items-end pr-1">
+                <div key={currentRound!.id} className="animate-bubble-pop-right max-w-[82%]">
+                  <div className="bubble-sent px-4 py-2.5 text-[15px] leading-relaxed">
+                    {currentRound!.text}
+                  </div>
+                </div>
+                {feedbackState !== "idle" && revealedTimestamp && (
+                  <p
+                    className={`mt-1.5 pr-1 text-[11px] text-gray-400 transition-all duration-300 ease-out ${
+                      revealVisible ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+                    }`}
+                  >
+                    {formatMessageTimestamp(revealedTimestamp)}
+                  </p>
                 )}
               </div>
 
-              {/* Guess buttons */}
-              <div className="grid grid-cols-2 gap-2.5">
-                {senderOptions.map((senderName, index) => (
-                  <button
-                    key={senderName}
-                    type="button"
-                    onClick={() => void handleGuess(senderName)}
-                    disabled={feedbackState !== "idle" || isSubmittingGuess}
-                    className={`px-4 py-2.5 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed ${getButtonClasses(senderName, index)}`}
-                  >
-                    {senderName}
-                  </button>
-                ))}
-              </div>
+              {feedbackState !== "idle" && (
+                <div className="flex w-full justify-start pl-1">
+                  <div className="animate-bubble-pop-left max-w-[82%]">
+                    <div className="bubble-received px-4 py-2.5 text-[15px] leading-relaxed">
+                      {revealText}
+                    </div>
+                  </div>
+                </div>
+              )}
 
-              {/* Next + Show context buttons — fade in with reveal bubble */}
-              <div
-                className={`flex flex-col items-center gap-2 transition-all duration-300 ease-out ${
-                  feedbackState !== "idle"
-                    ? revealVisible
-                      ? "pointer-events-auto translate-y-0 opacity-100"
-                      : "pointer-events-none translate-y-2 opacity-0"
-                    : "pointer-events-none opacity-0"
-                }`}
-              >
+              <div ref={bottomRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Controls */}
+        {hasValidSetup && !isLoadingRound && (
+          <div className="flex shrink-0 flex-col gap-5 px-6 pb-8 pt-4">
+            <div className="grid grid-cols-2 gap-2.5">
+              {senderOptions.map((senderName, index) => (
+                <button
+                  key={senderName}
+                  type="button"
+                  onClick={() => void handleGuess(senderName)}
+                  disabled={feedbackState !== "idle" || isSubmittingGuess}
+                  className={`px-4 py-2.5 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed ${getButtonClasses(senderName, index)}`}
+                >
+                  {getFirstName(senderName)}
+                </button>
+              ))}
+            </div>
+
+            <div
+              className={`flex flex-col items-center gap-2 transition-all duration-300 ease-out ${
+                feedbackState !== "idle"
+                  ? revealVisible
+                    ? "pointer-events-auto translate-y-0 opacity-100"
+                    : "pointer-events-none translate-y-2 opacity-0"
+                  : "pointer-events-none opacity-0"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                {contextMessages === null ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleShowContext()}
+                    disabled={isLoadingContext}
+                    className="rounded-full border border-gray-300 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoadingContext ? "Loading…" : "View context"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleHideContext}
+                    className="rounded-full border border-gray-300 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 active:scale-95"
+                  >
+                    Back to quote
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => void handleNext()}
@@ -421,32 +714,28 @@ export default function Home() {
                 >
                   Next
                 </button>
-                {contextMessages === null && (
-                  <button
-                    type="button"
-                    onClick={() => void handleShowContext()}
-                    disabled={isLoadingContext}
-                    className="text-xs text-gray-400 underline-offset-2 hover:text-gray-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-                  >
-                    {isLoadingContext ? "Loading context…" : "Show context"}
-                  </button>
-                )}
               </div>
-            </>
-          )}
+            </div>
 
-          {/* Session dot progress */}
-          <div className="flex justify-center gap-1.5 pt-1">
-            {Array.from({ length: SESSION_DOT_COUNT }).map((_, index) => (
-              <span
-                key={index}
-                className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${
-                  index < filledDots ? "bg-gray-400" : "bg-gray-200"
-                }`}
-              />
-            ))}
+            <div className="flex flex-col items-center gap-1 pt-1">
+              <div className="flex justify-center gap-1.5">
+                {Array.from({ length: SESSION_DOT_COUNT }).map((_, index) => (
+                  <span
+                    key={index}
+                    className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${
+                      index < filledDots ? "bg-gray-400" : "bg-gray-200"
+                    }`}
+                  />
+                ))}
+              </div>
+              {sessionGuesses > 0 && (
+                <p className="text-[10px] text-gray-400">
+                  {filledDots} of {SESSION_DOT_COUNT} this session
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
