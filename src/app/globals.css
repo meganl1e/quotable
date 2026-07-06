@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #FAF7F2;
+  --foreground: #1c1c1e;
 }
 
 @theme inline {
@@ -12,15 +12,137 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+}
+
+/* iMessage-style sent bubble — rounded body + curved tail at bottom-right */
+.bubble-sent {
+  --bubble-color: #0a84ff;
+  --page-bg: #faf7f2;
+  position: relative;
+  background: var(--bubble-color);
+  border-radius: 20px;
+  color: white;
+  margin-right: 6px;
+  margin-bottom: 2px;
+  overflow-wrap: break-word;
+}
+
+.bubble-sent::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  bottom: 0;
+  right: -7px;
+  width: 20px;
+  height: 20px;
+  background: var(--bubble-color);
+  border-bottom-left-radius: 15px 14px;
+}
+
+.bubble-sent::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  bottom: 0;
+  right: -26px;
+  width: 26px;
+  height: 20px;
+  background: var(--page-bg);
+  border-bottom-left-radius: 10px;
+}
+
+/* iMessage-style received bubble — curved tail at bottom-left */
+.bubble-received {
+  --bubble-color: #e9e9eb;
+  --page-bg: #faf7f2;
+  position: relative;
+  background: var(--bubble-color);
+  border-radius: 20px;
+  color: #1c1c1e;
+  margin-left: 6px;
+  margin-bottom: 2px;
+  overflow-wrap: break-word;
+}
+
+.bubble-received::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  bottom: 0;
+  left: -7px;
+  width: 20px;
+  height: 20px;
+  background: var(--bubble-color);
+  border-bottom-right-radius: 15px 14px;
+}
+
+.bubble-received::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  bottom: 0;
+  left: -26px;
+  width: 26px;
+  height: 20px;
+  background: var(--page-bg);
+  border-bottom-right-radius: 10px;
+}
+
+/* iMessage-style bubble pop-in — subtle scale + fade from the tail */
+@keyframes bubble-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-bubble-pop-right {
+  animation: bubble-pop 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform-origin: bottom right;
+}
+
+.animate-bubble-pop-left {
+  animation: bubble-pop 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform-origin: bottom left;
+}
+
+@keyframes shake-x {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+@keyframes hud-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+}
+
+.animate-shake-x {
+  animation: shake-x 0.4s ease-in-out;
+}
+
+.animate-hud-pulse {
+  animation: hud-pulse 0.35s ease-out;
 }

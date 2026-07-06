@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run build:index && next build",
+    "build:index": "node scripts/build-chat-index.mjs",
     "start": "next start",
     "lint": "eslint"
   },
