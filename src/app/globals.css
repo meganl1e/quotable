@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  --background: #FAF7F2;
+  --background: #faf7f2;
   --foreground: #1c1c1e;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -18,29 +19,6 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
 }
 
-/* iMessage-style sent bubble */
-.bubble-sent {
-  --bubble-color: #0a84ff;
-  position: relative;
-  background: var(--bubble-color);
-  border-radius: 20px;
-  border-bottom-right-radius: 6px;
-  color: white;
-  overflow-wrap: break-word;
-}
-
-/* iMessage-style received bubble */
-.bubble-received {
-  --bubble-color: #e9e9eb;
-  position: relative;
-  background: var(--bubble-color);
-  border-radius: 20px;
-  border-bottom-left-radius: 6px;
-  color: #1c1c1e;
-  overflow-wrap: break-word;
-}
-
-/* iMessage-style bubble pop-in — subtle scale + fade from the tail */
 @keyframes bubble-pop {
   0% {
     opacity: 0;
@@ -50,16 +28,6 @@ body {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
-}
-
-.animate-bubble-pop-right {
-  animation: bubble-pop 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  transform-origin: bottom right;
-}
-
-.animate-bubble-pop-left {
-  animation: bubble-pop 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  transform-origin: bottom left;
 }
 
 @keyframes shake-x {
@@ -87,70 +55,134 @@ body {
   }
 }
 
-.animate-shake-x {
-  animation: shake-x 0.4s ease-in-out;
+@keyframes start-notification-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-.animate-hud-pulse {
-  animation: hud-pulse 0.35s ease-out;
+@keyframes start-sheet-in {
+  0% {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.bubble-target-highlight {
-  font-weight: 600;
-}
+@layer components {
+  /* iMessage-style sent bubble */
+  .bubble-sent {
+    --bubble-color: #0a84ff;
+    position: relative;
+    background-color: var(--bubble-color);
+    border-radius: 20px;
+    border-bottom-right-radius: 6px;
+    color: #fff;
+    overflow-wrap: break-word;
+  }
 
-.bubble-sent.bubble-target-highlight {
-  --bubble-color: #0070e0;
-  box-shadow: 0 2px 6px rgba(10, 132, 255, 0.28);
-}
+  /* iMessage-style received bubble */
+  .bubble-received {
+    --bubble-color: #e9e9eb;
+    position: relative;
+    background-color: var(--bubble-color);
+    border-radius: 20px;
+    border-bottom-left-radius: 6px;
+    color: #1c1c1e;
+    overflow-wrap: break-word;
+  }
 
-.bubble-received.bubble-target-highlight {
-  --bubble-color: #d8d8dc;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
+  .animate-bubble-pop-right {
+    animation: bubble-pop 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform-origin: bottom right;
+  }
 
-/* Stacked bubbles in a group — fully rounded, no tail corner */
-.bubble-stack.bubble-sent,
-.bubble-stack.bubble-received {
-  margin: 0;
-}
+  .animate-bubble-pop-left {
+    animation: bubble-pop 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform-origin: bottom left;
+  }
 
-.bubble-stack.bubble-sent::before,
-.bubble-stack.bubble-sent::after,
-.bubble-stack.bubble-received::before,
-.bubble-stack.bubble-received::after {
-  display: none;
-}
+  .animate-shake-x {
+    animation: shake-x 0.4s ease-in-out;
+  }
 
-.bubble-stack.bubble-received {
-  border-bottom-left-radius: 10px;
-}
+  .animate-hud-pulse {
+    animation: hud-pulse 0.35s ease-out;
+  }
 
-.bubble-stack.bubble-sent {
-  border-bottom-right-radius: 10px;
-}
+  .animate-start-notification-in {
+    animation: start-notification-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
 
-/* Bubble that follows another bubble in the same stack — softens the touching top corner */
-.bubble-stack-top.bubble-received {
-  border-top-left-radius: 10px;
-}
+  .animate-start-sheet-in {
+    animation: start-sheet-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards;
+    opacity: 0;
+  }
 
-.bubble-stack-top.bubble-sent {
-  border-top-right-radius: 10px;
-}
+  .bubble-target-highlight {
+    font-weight: 600;
+  }
 
-.chat-scroll {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: #c7c7cc transparent;
-}
+  .bubble-sent.bubble-target-highlight {
+    --bubble-color: #0070e0;
+    box-shadow: 0 2px 6px rgba(10, 132, 255, 0.28);
+  }
 
-.chat-scroll::-webkit-scrollbar {
-  width: 4px;
-}
+  .bubble-received.bubble-target-highlight {
+    --bubble-color: #d8d8dc;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  }
 
-.chat-scroll::-webkit-scrollbar-thumb {
-  background: #c7c7cc;
-  border-radius: 999px;
+  /* Stacked bubbles in a group */
+  .bubble-stack.bubble-sent,
+  .bubble-stack.bubble-received {
+    margin: 0;
+  }
+
+  .bubble-stack.bubble-sent::before,
+  .bubble-stack.bubble-sent::after,
+  .bubble-stack.bubble-received::before,
+  .bubble-stack.bubble-received::after {
+    display: none;
+  }
+
+  .bubble-stack.bubble-received {
+    border-bottom-left-radius: 10px;
+  }
+
+  .bubble-stack.bubble-sent {
+    border-bottom-right-radius: 10px;
+  }
+
+  .bubble-stack-top.bubble-received {
+    border-top-left-radius: 10px;
+  }
+
+  .bubble-stack-top.bubble-sent {
+    border-top-right-radius: 10px;
+  }
+
+  .chat-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #c7c7cc transparent;
+  }
+
+  .chat-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .chat-scroll::-webkit-scrollbar-thumb {
+    background: #c7c7cc;
+    border-radius: 999px;
+  }
 }

@@ -10,6 +10,8 @@ import {
   type RawChatMessage,
 } from "./filterMessages";
 
+export type DatasetMode = "main" | "sample";
+
 export type GameRound = {
   id: string;
   text: string;
@@ -63,19 +65,33 @@ type ChatIndexFile = {
   messages: PreparedMessage[];
 };
 
+// Raw format used in data/sample-data.json
+type SampleRawMessage = {
+  sendername: string;
+  timestampms: number;
+  content: string;
+};
+
 const DATA_DIR = join(process.cwd(), "src/data");
 const INDEX_PATH = join(DATA_DIR, "chat_index.json");
 const RAW_PATH = join(DATA_DIR, "chat_data.json");
+const SAMPLE_PATH = join(process.cwd(), "data/sample-data.json");
 
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 const DATASET_TTL_MS = Number(process.env.GAME_DATASET_TTL_MS ?? DEFAULT_TTL_MS);
 
-let cache: DatasetCache | null = null;
+const caches = new Map<DatasetMode, DatasetCache>();
 
 const readJsonFile = <T>(path: string): T => {
   const raw = readFileSync(path, "utf-8");
   return JSON.parse(raw) as T;
 };
+
+const convertSampleMessage = (m: SampleRawMessage): RawChatMessage => ({
+  sender: m.sendername,
+  text: m.content,
+  timestamp: new Date(m.timestampms).toISOString(),
+});
 
 const loadFromPrecomputedIndex = (): CachedDataset | null => {
   if (!existsSync(INDEX_PATH)) return null;
@@ -96,31 +112,45 @@ const loadFromRawMessages = (): CachedDataset => {
   return hydrateDataset(filtered.messages);
 };
 
-const buildDataset = (): CachedDataset => {
+const loadSampleDataset = (): CachedDataset => {
+  if (!existsSync(SAMPLE_PATH)) {
+    return hydrateDataset([]);
+  }
+
+  const sampleMessages = readJsonFile<SampleRawMessage[]>(SAMPLE_PATH);
+  const rawMessages = sampleMessages.map(convertSampleMessage);
+  const filtered = filterMessages(rawMessages);
+  return hydrateDataset(filtered.messages);
+};
+
+const buildDataset = (mode: DatasetMode): CachedDataset => {
+  if (mode === "sample") return loadSampleDataset();
+
   const fromIndex = loadFromPrecomputedIndex();
   if (fromIndex) return fromIndex;
 
   return loadFromRawMessages();
 };
 
-const getDataset = (): CachedDataset => {
+const getDataset = (mode: DatasetMode): CachedDataset => {
   const now = Date.now();
+  const cached = caches.get(mode);
 
-  if (cache && cache.expiresAt > now) {
-    return cache.dataset;
+  if (cached && cached.expiresAt > now) {
+    return cached.dataset;
   }
 
-  const dataset = buildDataset();
-  cache = {
+  const dataset = buildDataset(mode);
+  caches.set(mode, {
     dataset,
     expiresAt: now + DATASET_TTL_MS,
-  };
+  });
 
   return dataset;
 };
 
-export const getDatasetHealth = () => {
-  const dataset = getDataset();
+export const getDatasetHealth = (mode: DatasetMode = "main") => {
+  const dataset = getDataset(mode);
 
   if (dataset.messages.length === 0) {
     return "No guessable messages available in the dataset.";
@@ -133,7 +163,8 @@ export const getDatasetHealth = () => {
   return null;
 };
 
-export const getSenderOptions = (): string[] => getDataset().senderOptions.slice(0, 2);
+export const getSenderOptions = (mode: DatasetMode = "main"): string[] =>
+  getDataset(mode).senderOptions.slice(0, 2);
 
 const weightedRandom = (items: PreparedMessage[]): PreparedMessage => {
   const total = items.reduce((sum, item) => sum + (item.score ?? 1), 0);
@@ -145,8 +176,8 @@ const weightedRandom = (items: PreparedMessage[]): PreparedMessage => {
   return items[items.length - 1]!;
 };
 
-export const getRandomRound = (excludeId?: string): GameRound | null => {
-  const dataset = getDataset();
+export const getRandomRound = (excludeId?: string, mode: DatasetMode = "main"): GameRound | null => {
+  const dataset = getDataset(mode);
   const candidates =
     excludeId && dataset.messages.length > 1
       ? dataset.messages.filter((message) => message.id !== excludeId)
@@ -161,8 +192,12 @@ export const getRandomRound = (excludeId?: string): GameRound | null => {
   };
 };
 
-export const checkGuess = (roundId: string, guessedSender: string): GuessResult | null => {
-  const message = getDataset().byId.get(roundId);
+export const checkGuess = (
+  roundId: string,
+  guessedSender: string,
+  mode: DatasetMode = "main",
+): GuessResult | null => {
+  const message = getDataset(mode).byId.get(roundId);
   if (!message) return null;
 
   return {
@@ -173,21 +208,34 @@ export const checkGuess = (roundId: string, guessedSender: string): GuessResult 
 };
 
 // ---------------------------------------------------------------------------
-// Raw message context — loads chat_data.json once and caches in memory
+// Raw message context — loads source data once per mode and caches in memory
 // ---------------------------------------------------------------------------
 
-let rawMessagesCache: RawChatMessage[] | null = null;
+const rawMessagesCaches = new Map<DatasetMode, RawChatMessage[]>();
 
-const getRawMessages = (): RawChatMessage[] => {
-  if (rawMessagesCache) return rawMessagesCache;
+const getRawMessages = (mode: DatasetMode): RawChatMessage[] => {
+  const cached = rawMessagesCaches.get(mode);
+  if (cached) return cached;
 
-  if (!existsSync(RAW_PATH)) {
-    rawMessagesCache = [];
-    return rawMessagesCache;
+  let messages: RawChatMessage[];
+
+  if (mode === "sample") {
+    if (!existsSync(SAMPLE_PATH)) {
+      messages = [];
+    } else {
+      const sampleMessages = readJsonFile<SampleRawMessage[]>(SAMPLE_PATH);
+      messages = sampleMessages.map(convertSampleMessage);
+    }
+  } else {
+    if (!existsSync(RAW_PATH)) {
+      messages = [];
+    } else {
+      messages = readJsonFile<RawChatMessage[]>(RAW_PATH);
+    }
   }
 
-  rawMessagesCache = readJsonFile<RawChatMessage[]>(RAW_PATH);
-  return rawMessagesCache;
+  rawMessagesCaches.set(mode, messages);
+  return messages;
 };
 
 const DEFAULT_CONTEXT_WINDOW = 3;
@@ -224,11 +272,12 @@ const buildContextSlice = (
 export const getMessageContextPage = (
   roundId: string,
   options: ContextPageOptions = {},
+  mode: DatasetMode = "main",
 ): ContextPageResult | null => {
-  const message = getDataset().byId.get(roundId);
+  const message = getDataset(mode).byId.get(roundId);
   if (!message || message.rawIndex === undefined) return null;
 
-  const raw = getRawMessages();
+  const raw = getRawMessages(mode);
   if (raw.length === 0) return null;
 
   const targetRawIndex = message.rawIndex;
@@ -267,7 +316,8 @@ export const getMessageContextPage = (
 export const getMessageContext = (
   roundId: string,
   windowSize: number = DEFAULT_CONTEXT_WINDOW,
+  mode: DatasetMode = "main",
 ): ContextMessage[] | null => {
-  const page = getMessageContextPage(roundId, { before: windowSize, after: windowSize });
+  const page = getMessageContextPage(roundId, { before: windowSize, after: windowSize }, mode);
   return page?.context ?? null;
 };

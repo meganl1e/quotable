@@ -5,6 +5,7 @@ import {
   getDatasetHealth,
   getRandomRound,
   getSenderOptions,
+  type DatasetMode,
 } from "@/lib/game/messages";
 
 type GuessBody = {
@@ -12,20 +13,24 @@ type GuessBody = {
   guessedSender?: string;
 };
 
-const getConfigErrorResponse = () =>
+const parseMode = (value: string | null): DatasetMode =>
+  value === "sample" ? "sample" : "main";
+
+const getConfigErrorResponse = (mode: DatasetMode) =>
   NextResponse.json(
-    { error: getDatasetHealth() ?? "Game is not configured correctly." },
+    { error: getDatasetHealth(mode) ?? "Game is not configured correctly." },
     { status: 400 },
   );
 
 export async function GET(request: NextRequest) {
-  const healthError = getDatasetHealth();
+  const mode = parseMode(request.nextUrl.searchParams.get("mode"));
+  const healthError = getDatasetHealth(mode);
   if (healthError) {
-    return getConfigErrorResponse();
+    return getConfigErrorResponse(mode);
   }
 
   const excludeId = request.nextUrl.searchParams.get("excludeId") ?? undefined;
-  const round = getRandomRound(excludeId);
+  const round = getRandomRound(excludeId, mode);
 
   if (!round) {
     return NextResponse.json({ error: "Could not load a game round." }, { status: 500 });
@@ -33,14 +38,15 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     round,
-    senderOptions: getSenderOptions(),
+    senderOptions: getSenderOptions(mode),
   });
 }
 
 export async function POST(request: NextRequest) {
-  const healthError = getDatasetHealth();
+  const mode = parseMode(request.nextUrl.searchParams.get("mode"));
+  const healthError = getDatasetHealth(mode);
   if (healthError) {
-    return getConfigErrorResponse();
+    return getConfigErrorResponse(mode);
   }
 
   let body: GuessBody;
@@ -60,7 +66,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const result = checkGuess(roundId, guessedSender);
+  const result = checkGuess(roundId, guessedSender, mode);
   if (!result) {
     return NextResponse.json({ error: "Round not found." }, { status: 404 });
   }

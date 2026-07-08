@@ -7,10 +7,10 @@ import {
   getMessageContextPage,
   INITIAL_CONTEXT_AFTER,
   INITIAL_CONTEXT_BEFORE,
+  type DatasetMode,
 } from "@/lib/game/messages";
 
 const MAX_WINDOW = 10;
-const DEFAULT_WINDOW = 3;
 
 const parseOptionalInt = (value: string | null): number | undefined => {
   if (value === null || value.trim() === "") return undefined;
@@ -18,8 +18,12 @@ const parseOptionalInt = (value: string | null): number | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
+const parseMode = (value: string | null): DatasetMode =>
+  value === "sample" ? "sample" : "main";
+
 export async function GET(request: NextRequest) {
-  const healthError = getDatasetHealth();
+  const mode = parseMode(request.nextUrl.searchParams.get("mode"));
+  const healthError = getDatasetHealth(mode);
   if (healthError) {
     return NextResponse.json(
       { error: healthError ?? "Game is not configured correctly." },
@@ -42,19 +46,23 @@ export async function GET(request: NextRequest) {
   // Legacy: ?window=N returns flat context array (backward compat)
   if (legacyWindow !== undefined && startIndex === undefined && endIndex === undefined) {
     const windowSize = Math.min(Math.max(legacyWindow, 1), MAX_WINDOW);
-    const context = getMessageContext(roundId, windowSize);
+    const context = getMessageContext(roundId, windowSize, mode);
     if (!context) {
       return NextResponse.json({ error: "Round not found." }, { status: 404 });
     }
     return NextResponse.json({ context });
   }
 
-  const page = getMessageContextPage(roundId, {
-    before: before ?? (endIndex !== undefined ? CONTEXT_PAGE_SIZE : INITIAL_CONTEXT_BEFORE),
-    after: after ?? (startIndex !== undefined ? CONTEXT_PAGE_SIZE : INITIAL_CONTEXT_AFTER),
-    startIndex,
-    endIndex,
-  });
+  const page = getMessageContextPage(
+    roundId,
+    {
+      before: before ?? (endIndex !== undefined ? CONTEXT_PAGE_SIZE : INITIAL_CONTEXT_BEFORE),
+      after: after ?? (startIndex !== undefined ? CONTEXT_PAGE_SIZE : INITIAL_CONTEXT_AFTER),
+      startIndex,
+      endIndex,
+    },
+    mode,
+  );
 
   if (!page) {
     return NextResponse.json({ error: "Round not found." }, { status: 404 });
