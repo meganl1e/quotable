@@ -209,8 +209,8 @@ const filterMessages = (messages) => {
 // ---------------------------------------------------------------------------
 
 if (!existsSync(rawPath)) {
-  console.error(`Missing source file: ${rawPath}`);
-  process.exit(1);
+  console.warn(`Skipping chat index build; missing source file: ${rawPath}`);
+  process.exit(0);
 }
 
 const startedAt = Date.now();
