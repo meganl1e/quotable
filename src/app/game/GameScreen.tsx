@@ -99,16 +99,16 @@ const formatMessageTimestamp = (isoTimestamp: string): string => {
 // Consistent per-sender color assignment by index in senderOptions array
 const SENDER_COLORS = [
   {
-    idle: "rounded-full border border-[#5AC8FA] text-[#0A84FF] hover:bg-[#0A84FF]/5 active:scale-95",
-    correct: "rounded-full border border-green-400 bg-green-50 text-green-600",
-    wrong: "rounded-full border border-red-300 bg-red-50 text-red-400",
-    dim: "rounded-full border border-gray-200 text-gray-300",
+    idle: "rounded-full bg-teal-500 text-white shadow-sm hover:bg-teal-600 active:scale-95",
+    correct: "rounded-full bg-green-500 text-white shadow-sm",
+    wrong: "rounded-full bg-red-400 text-white shadow-sm",
+    dim: "rounded-full bg-gray-100 text-gray-300",
   },
   {
-    idle: "rounded-full border border-[#FFB3C1] text-[#FF375F] hover:bg-[#FF375F]/5 active:scale-95",
-    correct: "rounded-full border border-green-400 bg-green-50 text-green-600",
-    wrong: "rounded-full border border-red-300 bg-red-50 text-red-400",
-    dim: "rounded-full border border-gray-200 text-gray-300",
+    idle: "rounded-full bg-[#FF7F6E] text-white shadow-sm hover:bg-[#FF6B5E] active:scale-95",
+    correct: "rounded-full bg-green-500 text-white shadow-sm",
+    wrong: "rounded-full bg-red-400 text-white shadow-sm",
+    dim: "rounded-full bg-gray-100 text-gray-300",
   },
 ] as const;
 
@@ -152,9 +152,13 @@ const buildApiUrl = (path: string, params: Record<string, string | number | unde
   return `${path}?${qs}`;
 };
 
-export function GameScreen() {
+type GameScreenProps = {
+  mode?: "main" | "sample";
+};
+
+export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
   const searchParams = useSearchParams();
-  const mode = searchParams.get("mode") ?? "main";
+  const mode = modeProp ?? (searchParams.get("mode") === "sample" ? "sample" : "main");
 
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);

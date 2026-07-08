@@ -75,10 +75,10 @@ export function StartScreen() {
                   href="/game"
                   className="flex w-full items-center justify-center rounded-full bg-gray-800 px-6 py-3 text-sm font-semibold text-white transition hover:bg-gray-700 active:scale-95"
                 >
-                  Use My Messages
+                  use my chat
                 </Link>
                 <Link
-                  href="/game?mode=sample"
+                  href="/demo"
                   className="text-center text-sm text-gray-500 transition hover:text-gray-800"
                 >
                   try sample chat →
