@@ -97,20 +97,13 @@ const formatMessageTimestamp = (isoTimestamp: string): string => {
 };
 
 // Consistent per-sender color assignment by index in senderOptions array
-const SENDER_COLORS = [
-  {
-    idle: "rounded-full bg-teal-500 text-white shadow-sm hover:bg-teal-600 active:scale-95",
-    correct: "rounded-full bg-green-500 text-white shadow-sm",
-    wrong: "rounded-full bg-red-400 text-white shadow-sm",
-    dim: "rounded-full bg-gray-100 text-gray-300",
-  },
-  {
-    idle: "rounded-full bg-[#FF7F6E] text-white shadow-sm hover:bg-[#FF6B5E] active:scale-95",
-    correct: "rounded-full bg-green-500 text-white shadow-sm",
-    wrong: "rounded-full bg-red-400 text-white shadow-sm",
-    dim: "rounded-full bg-gray-100 text-gray-300",
-  },
+const SENDER_IDLE_CLASSES = [
+  "rounded-full bg-[#9B7FD4] text-white shadow-sm hover:bg-[#8A6EC4] active:scale-95",
+  "rounded-full bg-[#E8945F] text-white shadow-sm hover:bg-[#D98550] active:scale-95",
 ] as const;
+
+const SENDER_OTHER_CLASSES =
+  "rounded-full bg-gray-100 text-gray-400 opacity-40";
 
 const SESSION_DOT_COUNT = 10;
 
@@ -170,7 +163,6 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
   const [setupError, setSetupError] = useState<string | null>(null);
   const [senderOptions, setSenderOptions] = useState<string[]>([]);
   const [currentRound, setCurrentRound] = useState<Round | null>(null);
-  const [selectedSender, setSelectedSender] = useState<string | null>(null);
   const [revealedCorrectSender, setRevealedCorrectSender] = useState<string | null>(null);
   const [revealedTimestamp, setRevealedTimestamp] = useState<string | null>(null);
   const [scorePulse, setScorePulse] = useState(false);
@@ -264,7 +256,6 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
       setCurrentRound(data.round);
       setSenderOptions(data.senderOptions.slice(0, 2));
       setFeedbackState("idle");
-      setSelectedSender(null);
       setRevealedCorrectSender(null);
       setRevealedTimestamp(null);
       setContextMessages(null);
@@ -287,7 +278,6 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
 
   const handleGuess = async (senderName: string) => {
     if (!currentRound || feedbackState !== "idle" || isSubmittingGuess) return;
-    setSelectedSender(senderName);
     setIsSubmittingGuess(true);
 
     try {
@@ -321,7 +311,6 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
         error instanceof Error ? error.message : "Could not submit your guess.";
       setSetupError(message);
       setFeedbackState("idle");
-      setSelectedSender(null);
       setRevealedCorrectSender(null);
       setRevealedTimestamp(null);
     } finally {
@@ -465,15 +454,17 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
         : sessionGuesses % SESSION_DOT_COUNT;
 
   const getButtonClasses = (senderName: string, index: number): string => {
-    const colors = SENDER_COLORS[index % 2];
-    const showAnsweredState = feedbackState !== "idle";
-    const isThisCorrect = revealedCorrectSender === senderName;
-    const isSelected = selectedSender === senderName;
+    if (feedbackState === "idle") return SENDER_IDLE_CLASSES[index % 2]!;
+    if (revealedCorrectSender === senderName) return SENDER_IDLE_CLASSES[index % 2]!;
+    return SENDER_OTHER_CLASSES;
+  };
 
-    if (!showAnsweredState) return colors.idle;
-    if (isThisCorrect) return colors.correct;
-    if (isSelected && feedbackState === "incorrect") return `animate-shake-x ${colors.wrong}`;
-    return colors.dim;
+  const getButtonLabel = (senderName: string): string => {
+    const name = getFirstName(senderName);
+    if (feedbackState !== "idle" && revealedCorrectSender === senderName) {
+      return `${name} ✓`;
+    }
+    return name;
   };
 
   const revealText = feedbackState !== "idle"
@@ -674,6 +665,14 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                 </div>
               ))}
 
+              {playedRounds.length === 0 && (
+                <div className="flex items-center gap-3 py-1">
+                  <div className="h-px flex-1 bg-gray-200" />
+                  <span className="text-[11px] text-gray-400">Round 1</span>
+                  <div className="h-px flex-1 bg-gray-200" />
+                </div>
+              )}
+
               {/* Active round */}
               <div className="flex w-full flex-col items-end pr-1">
                 <div key={currentRound!.id} className="animate-bubble-pop-right max-w-[82%]">
@@ -707,58 +706,67 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
           )}
         </div>
 
-        {/* Controls */}
-        {hasValidSetup && !isLoadingRound && (
+        {/* Controls — fixed footer height so buttons don't shift on load or after answering */}
+        {(hasValidSetup || isLoadingRound) && (
           <div className="flex shrink-0 flex-col gap-5 px-6 pb-8 pt-4">
             <div className="grid grid-cols-2 gap-2.5">
-              {senderOptions.map((senderName, index) => (
+              {(hasValidSetup ? senderOptions : ["", ""]).map((senderName, index) => (
                 <button
-                  key={senderName}
+                  key={hasValidSetup ? senderName : index}
                   type="button"
                   onClick={() => void handleGuess(senderName)}
-                  disabled={feedbackState !== "idle" || isSubmittingGuess}
-                  className={`px-4 py-2.5 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed ${getButtonClasses(senderName, index)}`}
+                  disabled={
+                    !hasValidSetup ||
+                    isLoadingRound ||
+                    feedbackState !== "idle" ||
+                    isSubmittingGuess
+                  }
+                  className={`px-4 py-2.5 text-sm font-medium transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-100 ${
+                    hasValidSetup
+                      ? getButtonClasses(senderName, index)
+                      : "rounded-full bg-gray-200 text-transparent shadow-sm"
+                  }`}
                 >
-                  {getFirstName(senderName)}
+                  {hasValidSetup ? getButtonLabel(senderName) : "\u00A0"}
                 </button>
               ))}
             </div>
 
-            <div
-              className={`flex flex-col items-center gap-2 transition-all duration-300 ease-out ${
-                feedbackState !== "idle"
-                  ? revealVisible
-                    ? "pointer-events-auto translate-y-0 opacity-100"
-                    : "pointer-events-none translate-y-2 opacity-0"
-                  : "pointer-events-none opacity-0"
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                {contextMessages === null ? (
+            <div className="relative h-[42px] w-full">
+              <div
+                className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ease-out ${
+                  feedbackState !== "idle" && revealVisible
+                    ? "pointer-events-auto opacity-100"
+                    : "pointer-events-none opacity-0"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  {contextMessages === null ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleShowContext()}
+                      disabled={isLoadingContext}
+                      className="rounded-full border border-gray-300 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isLoadingContext ? "Loading…" : "View context"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleHideContext}
+                      className="rounded-full border border-gray-300 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 active:scale-95"
+                    >
+                      Back to quote
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => void handleShowContext()}
-                    disabled={isLoadingContext}
-                    className="rounded-full border border-gray-300 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => void handleNext()}
+                    className="rounded-full bg-gray-800 px-8 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-700 active:scale-95"
                   >
-                    {isLoadingContext ? "Loading…" : "View context"}
+                    Next
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleHideContext}
-                    className="rounded-full border border-gray-300 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 active:scale-95"
-                  >
-                    Back to quote
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => void handleNext()}
-                  className="rounded-full bg-gray-800 px-8 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-700 active:scale-95"
-                >
-                  Next
-                </button>
+                </div>
               </div>
             </div>
 
@@ -773,11 +781,11 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                   />
                 ))}
               </div>
-              {sessionGuesses > 0 && (
-                <p className="text-[10px] text-gray-400">
-                  {filledDots} of {SESSION_DOT_COUNT} this session
-                </p>
-              )}
+              <p className="min-h-[14px] text-[10px] text-gray-400">
+                {sessionGuesses > 0
+                  ? `${filledDots} of ${SESSION_DOT_COUNT} this session`
+                  : "\u00A0"}
+              </p>
             </div>
           </div>
         )}

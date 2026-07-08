@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const NOTIFICATION_MESSAGE = "ok i need to tell you something 💀";
+import { getNextStartNotification } from "@/lib/startNotifications";
 
 const formatStatusTime = (date: Date): string =>
   new Intl.DateTimeFormat("en-US", {
@@ -29,6 +29,11 @@ const StatusIcons = () => (
 
 export function StartScreen() {
   const [time, setTime] = useState("");
+  const [notification, setNotification] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNotification(getNextStartNotification());
+  }, []);
 
   useEffect(() => {
     const update = () => setTime(formatStatusTime(new Date()));
@@ -51,14 +56,19 @@ export function StartScreen() {
 
           {/* Notification — hero, centered */}
           <div className="flex flex-1 items-center justify-center px-6 pb-4">
-            <div className="animate-start-notification-in w-full max-w-[300px] rounded-2xl border border-gray-100 bg-white p-4 shadow-md">
+            <div
+              key={notification ?? "loading"}
+              className="animate-start-notification-in w-full max-w-[300px] rounded-2xl border border-gray-100 bg-white p-4 shadow-md"
+            >
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   Messages
                 </span>
                 <span className="text-[11px] text-gray-400">now</span>
               </div>
-              <p className="text-[15px] leading-snug text-gray-900">{NOTIFICATION_MESSAGE}</p>
+              <p className="line-clamp-3 text-[15px] leading-snug text-gray-900">
+                {notification ?? "\u00A0"}
+              </p>
             </div>
           </div>
 
@@ -66,20 +76,20 @@ export function StartScreen() {
           <div className="animate-start-sheet-in shrink-0 rounded-t-[1.75rem] border-t border-gray-100 bg-white px-6 pb-10 pt-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
             <div className="flex flex-col gap-6">
               <div className="flex flex-col gap-1.5">
-                <h1 className="text-4xl font-light tracking-tight text-gray-900">quotable</h1>
+                <h1 className="text-4xl font-normal tracking-tight text-gray-600">quotable</h1>
                 <p className="text-sm text-gray-500">guess who sent it</p>
               </div>
 
               <div className="flex flex-col gap-3">
                 <Link
                   href="/game"
-                  className="flex w-full items-center justify-center rounded-full bg-gray-800 px-6 py-3 text-sm font-semibold text-white transition hover:bg-gray-700 active:scale-95"
+                  className="flex w-full items-center justify-center rounded-full bg-[#0A84FF] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0070E0] active:scale-95"
                 >
                   use my chat
                 </Link>
                 <Link
                   href="/demo"
-                  className="text-center text-sm text-gray-500 transition hover:text-gray-800"
+                  className="text-center text-sm text-[#0A84FF] transition hover:text-[#0070E0]"
                 >
                   try sample chat →
                 </Link>
