@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useGameSettings } from "@/lib/gameSettings";
 
 type Round = {
   id: string;
@@ -96,19 +97,7 @@ const formatMessageTimestamp = (isoTimestamp: string): string => {
   }).format(date);
 };
 
-// Consistent per-sender color assignment by index in senderOptions array
-const SENDER_IDLE_CLASSES = [
-  "rounded-full bg-[#9B7FD4] text-white shadow-sm hover:bg-[#8A6EC4] active:scale-95",
-  "rounded-full bg-[#E8945F] text-white shadow-sm hover:bg-[#D98550] active:scale-95",
-] as const;
-
-const SENDER_OTHER_CLASSES =
-  "rounded-full bg-gray-100 text-gray-400 opacity-40";
-
 const SESSION_DOT_COUNT = 10;
-
-const CONTEXT_LOAD_BUTTON_CLASSES =
-  "inline-flex items-center justify-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-600 shadow-sm transition hover:bg-gray-50 hover:text-gray-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50";
 
 const ContextChevron = ({ direction }: { direction: "up" | "down" }) => (
   <svg
@@ -152,6 +141,8 @@ type GameScreenProps = {
 export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
   const searchParams = useSearchParams();
   const mode = modeProp ?? (searchParams.get("mode") === "sample" ? "sample" : "main");
+  const { effectiveTheme, personOneButtonTone, personTwoButtonTone, phoneBackgroundTone } = useGameSettings();
+  const isDark = effectiveTheme === "dark";
 
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
@@ -177,7 +168,6 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
   const prevScoreRef = useRef(0);
   const prevStreakRef = useRef(0);
   const contextScrollRef = useRef<HTMLDivElement>(null);
-  const targetBubbleRef = useRef<HTMLDivElement>(null);
   const shouldAnchorTargetRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -235,7 +225,8 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
     if (contextMessages === null || !shouldAnchorTargetRef.current) return;
     shouldAnchorTargetRef.current = false;
     const t = window.setTimeout(() => {
-      targetBubbleRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      const targetBubble = contextScrollRef.current?.querySelector<HTMLElement>("[data-target-bubble='true']");
+      targetBubble?.scrollIntoView({ block: "center", behavior: "smooth" });
     }, 50);
     return () => window.clearTimeout(t);
   }, [contextMessages]);
@@ -453,10 +444,21 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
         ? SESSION_DOT_COUNT
         : sessionGuesses % SESSION_DOT_COUNT;
 
-  const getButtonClasses = (senderName: string, index: number): string => {
-    if (feedbackState === "idle") return SENDER_IDLE_CLASSES[index % 2]!;
-    if (revealedCorrectSender === senderName) return SENDER_IDLE_CLASSES[index % 2]!;
-    return SENDER_OTHER_CLASSES;
+  const getSenderButtonStyle = (index: number) => {
+    const tone = index % 2 === 0 ? personOneButtonTone : personTwoButtonTone;
+    return {
+      "--sender-btn-bg": tone.main,
+      "--sender-btn-bg-hover": tone.alt,
+      "--sender-btn-text": tone.text,
+    } as CSSProperties;
+  };
+
+  const getButtonClasses = (senderName: string): string => {
+    if (feedbackState === "idle") return "sender-button rounded-full shadow-sm active:scale-95";
+    if (revealedCorrectSender === senderName) return "sender-button rounded-full shadow-sm active:scale-95";
+    return isDark
+      ? "rounded-full bg-white/15 text-white/35 opacity-55"
+      : "rounded-full bg-gray-100 text-gray-400 opacity-40";
   };
 
   const getButtonLabel = (senderName: string): string => {
@@ -481,7 +483,6 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
       isStackTop = false,
       timestamp,
       showTimestamp = false,
-      bubbleRef,
     }: {
       text: string;
       isBlue: boolean;
@@ -490,19 +491,20 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
       isStackTop?: boolean;
       timestamp?: string | null;
       showTimestamp?: boolean;
-      bubbleRef?: RefObject<HTMLDivElement | null>;
     },
   ) => (
     <div key={key} className={`flex flex-col ${isBlue ? "items-end" : "items-start"}`}>
       <div
-        ref={isTarget ? bubbleRef : undefined}
-        className={`px-4 py-2 text-[13px] leading-snug ${isBlue ? "bubble-sent" : "bubble-received"} ${!showTail ? "bubble-stack" : ""} ${isStackTop ? "bubble-stack-top" : ""} ${isTarget ? "bubble-target-highlight" : ""}`}
+        data-target-bubble={isTarget ? "true" : undefined}
+        className={`px-4 py-2.5 text-[15px] leading-relaxed ${isBlue ? "bubble-sent" : "bubble-received"} ${!showTail ? "bubble-stack" : ""} ${isStackTop ? "bubble-stack-top" : ""} ${isTarget ? "bubble-target-highlight" : ""}`}
       >
         {text}
       </div>
       {showTimestamp && timestamp && (
         <p
-          className={`mt-1.5 text-[11px] font-medium text-gray-500 ${isBlue ? "pr-1 text-right" : "pl-1"}`}
+          className={`mt-1.5 text-[11px] font-medium ${isDark ? "text-white/55" : "text-gray-500"} ${
+            isBlue ? "pr-1 text-right" : "pl-1"
+          }`}
         >
           {formatMessageTimestamp(timestamp)}
         </p>
@@ -511,13 +513,23 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
   );
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#FAF7F2] px-4 py-8">
-      <div className="flex h-[min(844px,calc(100svh-4rem))] w-full max-w-[390px] flex-col overflow-hidden rounded-[2.5rem] border border-gray-200 bg-[#FAF7F2] shadow-sm">
+    <div
+      className="flex min-h-screen items-center justify-center px-4 py-8"
+      style={{ background: phoneBackgroundTone.screen }}
+    >
+      <div
+        className={`flex h-[min(844px,calc(100svh-4rem))] w-full max-w-[390px] flex-col overflow-hidden rounded-[2.5rem] border shadow-sm ${
+          isDark ? "border-white/15" : "border-gray-200"
+        }`}
+        style={{ background: phoneBackgroundTone.phone }}
+      >
         {/* Header: back + score */}
         <div className="relative flex shrink-0 items-center justify-center px-6 pb-3 pt-8">
           <Link
             href="/"
-            className="absolute left-6 flex items-center gap-0.5 text-sm font-medium text-gray-400 transition hover:text-gray-600 active:scale-95"
+            className={`absolute left-6 flex items-center gap-0.5 text-sm font-medium transition active:scale-95 ${
+              isDark ? "text-white/60 hover:text-white/85" : "text-gray-400 hover:text-gray-600"
+            }`}
           >
             <svg
               aria-hidden
@@ -533,20 +545,36 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
             </svg>
             Back
           </Link>
-          <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-5 py-2 text-sm text-gray-500">
+          <Link
+            href="/settings"
+            className={`absolute right-6 text-xs font-medium transition ${
+              isDark ? "text-white/60 hover:text-white/85" : "text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            Settings
+          </Link>
+          <div
+            className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm ${
+              isDark ? "bg-black/20 text-white/70" : "bg-gray-100 text-gray-500"
+            }`}
+          >
             <span>
               Score:{" "}
               <span
-                className={`inline-block font-semibold text-gray-700 ${scorePulse ? "animate-hud-pulse" : ""}`}
+                className={`inline-block font-semibold ${isDark ? "text-white/90" : "text-gray-700"} ${
+                  scorePulse ? "animate-hud-pulse" : ""
+                }`}
               >
                 {score}
               </span>
             </span>
-            <span className="text-gray-300">·</span>
+            <span className={isDark ? "text-white/30" : "text-gray-300"}>·</span>
             <span>
               Streak:{" "}
               <span
-                className={`inline-block font-semibold text-gray-700 ${streakPulse ? "animate-hud-pulse" : ""}`}
+                className={`inline-block font-semibold ${isDark ? "text-white/90" : "text-gray-700"} ${
+                  streakPulse ? "animate-hud-pulse" : ""
+                }`}
               >
                 {streak}
               </span>
@@ -561,12 +589,12 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
         >
           {isLoadingRound ? (
             <div className="flex h-full min-h-[200px] items-center justify-center">
-              <p className="text-sm text-gray-400">Loading...</p>
+              <p className={`text-sm ${isDark ? "text-white/55" : "text-gray-400"}`}>Loading...</p>
             </div>
           ) : !hasValidSetup ? (
             <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-2 text-center">
-              <p className="text-sm font-medium text-gray-600">Setup issue</p>
-              <p className="text-xs text-gray-400">
+              <p className={`text-sm font-medium ${isDark ? "text-white/85" : "text-gray-600"}`}>Setup issue</p>
+              <p className={`text-xs ${isDark ? "text-white/55" : "text-gray-400"}`}>
                 {setupError ?? "Make sure filtered messages and senders are available."}
               </p>
             </div>
@@ -578,7 +606,11 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                     type="button"
                     onClick={() => void handleLoadEarlier()}
                     disabled={isLoadingEarlier}
-                    className={CONTEXT_LOAD_BUTTON_CLASSES}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${
+                      isDark
+                        ? "border-white/20 bg-black/20 text-white/85 hover:bg-black/30"
+                        : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                    }`}
                   >
                     <ContextChevron direction="up" />
                     {isLoadingEarlier ? "Loading…" : "Load earlier"}
@@ -594,10 +626,12 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                     className={`flex w-full flex-col ${isBlue ? "items-end pr-2" : "items-start pl-2"}`}
                   >
                     <div
-                      className={`flex max-w-[78%] flex-col gap-[2px] ${isBlue ? "items-end" : "items-start"}`}
+                      className={`flex max-w-[82%] flex-col gap-[2px] ${isBlue ? "items-end" : "items-start"}`}
                     >
                       <p
-                        className={`mb-0.5 text-[11px] font-semibold text-gray-600 ${isBlue ? "pr-1 text-right" : "pl-1"}`}
+                        className={`mb-0.5 text-[11px] font-semibold ${
+                          isDark ? "text-white/70" : "text-gray-600"
+                        } ${isBlue ? "pr-1 text-right" : "pl-1"}`}
                       >
                         {getFirstName(group.sender)}
                       </p>
@@ -610,7 +644,6 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                           isStackTop: i > 0,
                           timestamp: m.isTarget ? revealedTimestamp : undefined,
                           showTimestamp: m.isTarget,
-                          bubbleRef: m.isTarget ? targetBubbleRef : undefined,
                         }),
                       )}
                     </div>
@@ -624,7 +657,11 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                     type="button"
                     onClick={() => void handleLoadLater()}
                     disabled={isLoadingLater}
-                    className={CONTEXT_LOAD_BUTTON_CLASSES}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${
+                      isDark
+                        ? "border-white/20 bg-black/20 text-white/85 hover:bg-black/30"
+                        : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                    }`}
                   >
                     {isLoadingLater ? "Loading…" : "Load later"}
                     <ContextChevron direction="down" />
@@ -644,7 +681,7 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                       </div>
                     </div>
                     {pr.timestamp && (
-                      <p className="mt-1.5 pr-1 text-[11px] text-gray-400">
+                      <p className={`mt-1.5 pr-1 text-[11px] ${isDark ? "text-white/50" : "text-gray-400"}`}>
                         {formatMessageTimestamp(pr.timestamp)}
                       </p>
                     )}
@@ -658,18 +695,20 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                   </div>
                   {/* Round divider */}
                   <div className="flex items-center gap-3 py-1">
-                    <div className="h-px flex-1 bg-gray-200" />
-                    <span className="text-[11px] text-gray-400">Round {i + 2}</span>
-                    <div className="h-px flex-1 bg-gray-200" />
+                    <div className={`h-px flex-1 ${isDark ? "bg-white/15" : "bg-gray-200"}`} />
+                    <span className={`text-[11px] ${isDark ? "text-white/50" : "text-gray-400"}`}>
+                      Round {i + 2}
+                    </span>
+                    <div className={`h-px flex-1 ${isDark ? "bg-white/15" : "bg-gray-200"}`} />
                   </div>
                 </div>
               ))}
 
               {playedRounds.length === 0 && (
                 <div className="flex items-center gap-3 py-1">
-                  <div className="h-px flex-1 bg-gray-200" />
-                  <span className="text-[11px] text-gray-400">Round 1</span>
-                  <div className="h-px flex-1 bg-gray-200" />
+                  <div className={`h-px flex-1 ${isDark ? "bg-white/15" : "bg-gray-200"}`} />
+                  <span className={`text-[11px] ${isDark ? "text-white/50" : "text-gray-400"}`}>Round 1</span>
+                  <div className={`h-px flex-1 ${isDark ? "bg-white/15" : "bg-gray-200"}`} />
                 </div>
               )}
 
@@ -682,7 +721,7 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                 </div>
                 {feedbackState !== "idle" && revealedTimestamp && (
                   <p
-                    className={`mt-1.5 pr-1 text-[11px] text-gray-400 transition-all duration-300 ease-out ${
+                    className={`mt-1.5 pr-1 text-[11px] ${isDark ? "text-white/50" : "text-gray-400"} transition-all duration-300 ease-out ${
                       revealVisible ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
                     }`}
                   >
@@ -723,9 +762,12 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                   }
                   className={`px-4 py-2.5 text-sm font-medium transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-100 ${
                     hasValidSetup
-                      ? getButtonClasses(senderName, index)
-                      : "rounded-full bg-gray-200 text-transparent shadow-sm"
+                      ? getButtonClasses(senderName)
+                      : isDark
+                        ? "rounded-full bg-white/15 text-transparent shadow-sm"
+                        : "rounded-full bg-gray-200 text-transparent shadow-sm"
                   }`}
+                  style={hasValidSetup ? getSenderButtonStyle(index) : undefined}
                 >
                   {hasValidSetup ? getButtonLabel(senderName) : "\u00A0"}
                 </button>
@@ -746,7 +788,11 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                       type="button"
                       onClick={() => void handleShowContext()}
                       disabled={isLoadingContext}
-                      className="rounded-full border border-gray-300 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                      className={`rounded-full border px-6 py-2.5 text-sm font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${
+                        isDark
+                          ? "border-white/20 bg-black/20 text-white/90 hover:bg-black/30"
+                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
                     >
                       {isLoadingContext ? "Loading…" : "View context"}
                     </button>
@@ -754,7 +800,11 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                     <button
                       type="button"
                       onClick={handleHideContext}
-                      className="rounded-full border border-gray-300 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 active:scale-95"
+                      className={`rounded-full border px-6 py-2.5 text-sm font-semibold transition active:scale-95 ${
+                        isDark
+                          ? "border-white/20 bg-black/20 text-white/90 hover:bg-black/30"
+                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
                     >
                       Back to quote
                     </button>
@@ -762,7 +812,11 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                   <button
                     type="button"
                     onClick={() => void handleNext()}
-                    className="rounded-full bg-gray-800 px-8 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-700 active:scale-95"
+                    className={`rounded-full px-8 py-2.5 text-sm font-semibold transition active:scale-95 ${
+                      isDark
+                        ? "bg-white text-black hover:bg-white/90"
+                        : "bg-gray-800 text-white hover:bg-gray-700"
+                    }`}
                   >
                     Next
                   </button>
@@ -776,12 +830,18 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
                   <span
                     key={index}
                     className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${
-                      index < filledDots ? "bg-gray-400" : "bg-gray-200"
+                      index < filledDots
+                        ? isDark
+                          ? "bg-white/65"
+                          : "bg-gray-400"
+                        : isDark
+                          ? "bg-white/20"
+                          : "bg-gray-200"
                     }`}
                   />
                 ))}
               </div>
-              <p className="min-h-[14px] text-[10px] text-gray-400">
+              <p className={`min-h-[14px] text-[10px] ${isDark ? "text-white/50" : "text-gray-400"}`}>
                 {sessionGuesses > 0
                   ? `${filledDots} of ${SESSION_DOT_COUNT} this session`
                   : "\u00A0"}

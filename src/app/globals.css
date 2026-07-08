@@ -6,6 +6,12 @@
   color-scheme: light;
 }
 
+html[data-theme="dark"] {
+  --background: #17171a;
+  --foreground: #f2f2f4;
+  color-scheme: dark;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -17,6 +23,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
 @keyframes bubble-pop {
@@ -141,6 +148,16 @@ body {
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   }
 
+  html[data-theme="dark"] .bubble-received {
+    --bubble-color: #34343a;
+    color: #f5f5f7;
+  }
+
+  html[data-theme="dark"] .bubble-received.bubble-target-highlight {
+    --bubble-color: #3f3f46;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.24);
+  }
+
   /* Stacked bubbles in a group */
   .bubble-stack.bubble-sent,
   .bubble-stack.bubble-received {
@@ -184,5 +201,22 @@ body {
   .chat-scroll::-webkit-scrollbar-thumb {
     background: #c7c7cc;
     border-radius: 999px;
+  }
+
+  html[data-theme="dark"] .chat-scroll {
+    scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
+  }
+
+  html[data-theme="dark"] .chat-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.24);
+  }
+
+  .sender-button {
+    background: var(--sender-btn-bg);
+    color: var(--sender-btn-text);
+  }
+
+  .sender-button:hover {
+    background: var(--sender-btn-bg-hover);
   }
 }

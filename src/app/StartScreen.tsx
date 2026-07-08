@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { useGameSettings } from "@/lib/gameSettings";
 import { getNextStartNotification } from "@/lib/startNotifications";
 
 const formatStatusTime = (date: Date): string =>
@@ -11,8 +12,8 @@ const formatStatusTime = (date: Date): string =>
     minute: "2-digit",
   }).format(date);
 
-const StatusIcons = () => (
-  <div className="flex items-center gap-1.5 text-gray-400">
+const StatusIcons = ({ isDark }: { isDark: boolean }) => (
+  <div className={`flex items-center gap-1.5 ${isDark ? "text-white/55" : "text-gray-400"}`}>
     <svg aria-hidden className="h-2.5 w-3.5" viewBox="0 0 18 12" fill="currentColor">
       <rect x="0" y="8" width="3" height="4" rx="0.5" />
       <rect x="5" y="5" width="3" height="7" rx="0.5" />
@@ -29,11 +30,9 @@ const StatusIcons = () => (
 
 export function StartScreen() {
   const [time, setTime] = useState("");
-  const [notification, setNotification] = useState<string | null>(null);
-
-  useEffect(() => {
-    setNotification(getNextStartNotification());
-  }, []);
+  const [notification] = useState<string | null>(() => getNextStartNotification());
+  const { effectiveTheme, phoneBackgroundTone } = useGameSettings();
+  const isDark = effectiveTheme === "dark";
 
   useEffect(() => {
     const update = () => setTime(formatStatusTime(new Date()));
@@ -43,13 +42,23 @@ export function StartScreen() {
   }, []);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#FAF7F2] px-4 py-8">
-      <div className="relative flex h-[min(844px,calc(100svh-4rem))] w-full max-w-[390px] flex-col overflow-hidden rounded-[2.5rem] border border-gray-200 bg-[#FAF7F2] shadow-sm">
+    <div
+      className="flex min-h-screen items-center justify-center px-4 py-8"
+      style={{ background: phoneBackgroundTone.screen }}
+    >
+      <div
+        className={`relative flex h-[min(844px,calc(100svh-4rem))] w-full max-w-[390px] flex-col overflow-hidden rounded-[2.5rem] border shadow-sm ${
+          isDark ? "border-white/15" : "border-gray-200"
+        }`}
+        style={{ background: phoneBackgroundTone.phone }}
+      >
 
         {/* Status bar */}
         <div className="flex shrink-0 items-center justify-between px-8 pb-2 pt-5">
-          <span className="text-[13px] font-semibold tabular-nums text-gray-400">{time}</span>
-          <StatusIcons />
+          <span className={`text-[13px] font-semibold tabular-nums ${isDark ? "text-white/60" : "text-gray-400"}`}>
+            {time}
+          </span>
+          <StatusIcons isDark={isDark} />
         </div>
 
         <div className="relative flex min-h-0 flex-1 flex-col">
@@ -58,40 +67,68 @@ export function StartScreen() {
           <div className="flex flex-1 items-center justify-center px-6 pb-4">
             <div
               key={notification ?? "loading"}
-              className="animate-start-notification-in w-full max-w-[300px] rounded-2xl border border-gray-100 bg-white p-4 shadow-md"
+              className={`animate-start-notification-in w-full max-w-[300px] rounded-2xl border p-4 shadow-md ${
+                isDark ? "border-white/10 bg-black/20" : "border-gray-100 bg-white"
+              }`}
             >
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <span
+                  className={`text-[11px] font-semibold uppercase tracking-wide ${
+                    isDark ? "text-white/50" : "text-gray-400"
+                  }`}
+                >
                   Messages
                 </span>
-                <span className="text-[11px] text-gray-400">now</span>
+                <span className={`text-[11px] ${isDark ? "text-white/50" : "text-gray-400"}`}>now</span>
               </div>
-              <p className="line-clamp-3 text-[15px] leading-snug text-gray-900">
+              <p className={`line-clamp-3 text-[15px] leading-snug ${isDark ? "text-white/90" : "text-gray-900"}`}>
                 {notification ?? "\u00A0"}
               </p>
             </div>
           </div>
 
           {/* Bottom sheet */}
-          <div className="animate-start-sheet-in shrink-0 rounded-t-[1.75rem] border-t border-gray-100 bg-white px-6 pb-10 pt-8 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]">
+          <div
+            className={`animate-start-sheet-in shrink-0 rounded-t-[1.75rem] border-t px-6 pb-10 pt-8 ${
+              isDark
+                ? "border-white/10 bg-black/30 shadow-[0_-8px_30px_rgba(0,0,0,0.35)]"
+                : "border-gray-100 bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.06)]"
+            }`}
+          >
             <div className="flex flex-col gap-6">
               <div className="flex flex-col gap-1.5">
-                <h1 className="text-4xl font-normal tracking-tight text-gray-600">quotable</h1>
-                <p className="text-sm text-gray-500">guess who sent it</p>
+                <h1 className={`text-4xl font-normal tracking-tight ${isDark ? "text-white/90" : "text-gray-600"}`}>
+                  quotable
+                </h1>
+                <p className={`text-sm ${isDark ? "text-white/60" : "text-gray-500"}`}>guess who sent it</p>
               </div>
 
               <div className="flex flex-col gap-3">
                 <Link
                   href="/game"
-                  className="flex w-full items-center justify-center rounded-full bg-[#0A84FF] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0070E0] active:scale-95"
+                  className={`flex w-full items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition active:scale-95 ${
+                    isDark
+                      ? "bg-white text-[#151518] hover:bg-white/90"
+                      : "bg-[#0A84FF] text-white hover:bg-[#0070E0]"
+                  }`}
                 >
                   use my chat
                 </Link>
                 <Link
                   href="/demo"
-                  className="text-center text-sm text-[#0A84FF] transition hover:text-[#0070E0]"
+                  className={`text-center text-sm transition ${
+                    isDark ? "text-white/80 hover:text-white" : "text-[#0A84FF] hover:text-[#0070E0]"
+                  }`}
                 >
                   try sample chat →
+                </Link>
+                <Link
+                  href="/settings"
+                  className={`text-center text-xs transition ${
+                    isDark ? "text-white/55 hover:text-white/75" : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  settings
                 </Link>
               </div>
             </div>
