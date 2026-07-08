@@ -13,8 +13,12 @@ type GuessBody = {
   guessedSender?: string;
 };
 
-const parseMode = (value: string | null): DatasetMode =>
-  value === "sample" ? "sample" : "main";
+const DEMO_ONLY = process.env.DEMO_ONLY === "true";
+
+const parseMode = (value: string | null): DatasetMode => {
+  if (DEMO_ONLY) return "sample";
+  return value === "sample" ? "sample" : "main";
+};
 
 const getConfigErrorResponse = (mode: DatasetMode) =>
   NextResponse.json(

@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# private chat data — not shipped on demo branch
+src/data/chat_data.json
+src/data/chat_index.json

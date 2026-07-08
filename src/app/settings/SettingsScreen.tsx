@@ -22,16 +22,16 @@ export function SettingsScreen() {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center px-4 py-8"
+      className="flex min-h-[100dvh] items-stretch sm:items-center sm:justify-center sm:px-4 sm:py-8"
       style={{ background: phoneBackgroundTone.screen }}
     >
       <div
-        className={`flex h-[min(844px,calc(100svh-4rem))] w-full max-w-[390px] flex-col overflow-hidden rounded-[2.5rem] border shadow-sm ${
-          isDark ? "border-white/15" : "border-gray-200"
+        className={`flex w-full flex-1 flex-col overflow-hidden sm:h-[min(844px,calc(100svh-4rem))] sm:flex-none sm:max-w-[390px] sm:rounded-[2.5rem] sm:border sm:shadow-sm ${
+          isDark ? "sm:border-white/15" : "sm:border-gray-200"
         }`}
         style={{ background: phoneBackgroundTone.phone }}
       >
-        <div className="flex shrink-0 items-center justify-between px-6 pb-3 pt-8">
+        <div className="flex shrink-0 items-center justify-between px-6 pb-3 pt-[max(2rem,env(safe-area-inset-top))]">
           <Link
             href="/"
             className={`text-sm font-medium transition active:scale-95 ${
@@ -46,7 +46,7 @@ export function SettingsScreen() {
           <div className="w-[42px]" />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
           <section
             className={`rounded-2xl border p-4 ${
               isDark ? "border-white/15 bg-black/20" : "border-gray-200 bg-white/80"

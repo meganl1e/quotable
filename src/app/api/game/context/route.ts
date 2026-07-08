@@ -18,8 +18,12 @@ const parseOptionalInt = (value: string | null): number | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-const parseMode = (value: string | null): DatasetMode =>
-  value === "sample" ? "sample" : "main";
+const DEMO_ONLY = process.env.DEMO_ONLY === "true";
+
+const parseMode = (value: string | null): DatasetMode => {
+  if (DEMO_ONLY) return "sample";
+  return value === "sample" ? "sample" : "main";
+};
 
 export async function GET(request: NextRequest) {
   const mode = parseMode(request.nextUrl.searchParams.get("mode"));

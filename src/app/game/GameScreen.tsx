@@ -514,17 +514,17 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center px-4 py-8"
+      className="flex min-h-[100dvh] items-stretch sm:items-center sm:justify-center sm:px-4 sm:py-8"
       style={{ background: phoneBackgroundTone.screen }}
     >
       <div
-        className={`flex h-[min(844px,calc(100svh-4rem))] w-full max-w-[390px] flex-col overflow-hidden rounded-[2.5rem] border shadow-sm ${
-          isDark ? "border-white/15" : "border-gray-200"
+        className={`flex w-full flex-1 flex-col overflow-hidden sm:h-[min(844px,calc(100svh-4rem))] sm:flex-none sm:max-w-[390px] sm:rounded-[2.5rem] sm:border sm:shadow-sm ${
+          isDark ? "sm:border-white/15" : "sm:border-gray-200"
         }`}
         style={{ background: phoneBackgroundTone.phone }}
       >
         {/* Header: back + score */}
-        <div className="relative flex shrink-0 items-center justify-center px-6 pb-3 pt-8">
+        <div className="relative flex shrink-0 items-center justify-center px-6 pb-3 pt-[max(2rem,env(safe-area-inset-top))]">
           <Link
             href="/"
             className={`absolute left-6 flex items-center gap-0.5 text-sm font-medium transition active:scale-95 ${
@@ -747,7 +747,7 @@ export function GameScreen({ mode: modeProp }: GameScreenProps = {}) {
 
         {/* Controls — fixed footer height so buttons don't shift on load or after answering */}
         {(hasValidSetup || isLoadingRound) && (
-          <div className="flex shrink-0 flex-col gap-5 px-6 pb-8 pt-4">
+          <div className="flex shrink-0 flex-col gap-5 px-6 pt-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
             <div className="grid grid-cols-2 gap-2.5">
               {(hasValidSetup ? senderOptions : ["", ""]).map((senderName, index) => (
                 <button

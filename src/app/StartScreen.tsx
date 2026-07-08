@@ -43,18 +43,18 @@ export function StartScreen() {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center px-4 py-8"
+      className="flex min-h-[100dvh] items-stretch sm:items-center sm:justify-center sm:px-4 sm:py-8"
       style={{ background: phoneBackgroundTone.screen }}
     >
       <div
-        className={`relative flex h-[min(844px,calc(100svh-4rem))] w-full max-w-[390px] flex-col overflow-hidden rounded-[2.5rem] border shadow-sm ${
-          isDark ? "border-white/15" : "border-gray-200"
+        className={`relative flex w-full flex-1 flex-col overflow-hidden sm:h-[min(844px,calc(100svh-4rem))] sm:flex-none sm:max-w-[390px] sm:rounded-[2.5rem] sm:border sm:shadow-sm ${
+          isDark ? "sm:border-white/15" : "sm:border-gray-200"
         }`}
         style={{ background: phoneBackgroundTone.phone }}
       >
 
         {/* Status bar */}
-        <div className="flex shrink-0 items-center justify-between px-8 pb-2 pt-5">
+        <div className="flex shrink-0 items-center justify-between px-8 pb-2 pt-[max(1.25rem,env(safe-area-inset-top))]">
           <span className={`text-[13px] font-semibold tabular-nums ${isDark ? "text-white/60" : "text-gray-400"}`}>
             {time}
           </span>
@@ -89,7 +89,7 @@ export function StartScreen() {
 
           {/* Bottom sheet */}
           <div
-            className={`animate-start-sheet-in shrink-0 rounded-t-[1.75rem] border-t px-6 pb-10 pt-8 ${
+            className={`animate-start-sheet-in shrink-0 rounded-t-[1.75rem] border-t px-6 pt-8 pb-[max(2.5rem,env(safe-area-inset-bottom))] ${
               isDark
                 ? "border-white/10 bg-black/30 shadow-[0_-8px_30px_rgba(0,0,0,0.35)]"
                 : "border-gray-100 bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.06)]"
@@ -104,16 +104,33 @@ export function StartScreen() {
               </div>
 
               <div className="flex flex-col gap-3">
-                <Link
-                  href="/game"
-                  className={`flex w-full items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition active:scale-95 ${
-                    isDark
-                      ? "bg-white text-[#151518] hover:bg-white/90"
-                      : "bg-[#0A84FF] text-white hover:bg-[#0070E0]"
-                  }`}
-                >
-                  use my chat
-                </Link>
+                {process.env.NEXT_PUBLIC_DEMO_ONLY === "true" ? (
+                  <div
+                    className={`flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold ${
+                      isDark
+                        ? "bg-white/15 text-white/40"
+                        : "bg-gray-200 text-gray-400"
+                    }`}
+                  >
+                    use my chat
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                      isDark ? "bg-white/10 text-white/50" : "bg-gray-300 text-gray-500"
+                    }`}>
+                      coming soon
+                    </span>
+                  </div>
+                ) : (
+                  <Link
+                    href="/game"
+                    className={`flex w-full items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition active:scale-95 ${
+                      isDark
+                        ? "bg-white text-[#151518] hover:bg-white/90"
+                        : "bg-[#0A84FF] text-white hover:bg-[#0070E0]"
+                    }`}
+                  >
+                    use my chat
+                  </Link>
+                )}
                 <Link
                   href="/demo"
                   className={`text-center text-sm transition ${
