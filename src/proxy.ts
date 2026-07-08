@@ -1,10 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-const DEMO_ONLY = process.env.DEMO_ONLY === "true";
-
+// demo-prod branch: /game is always redirected to /demo — no env var needed.
 export function proxy(request: NextRequest) {
-  if (!DEMO_ONLY) return NextResponse.next();
-
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/game")) {

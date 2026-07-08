@@ -104,33 +104,21 @@ export function StartScreen() {
               </div>
 
               <div className="flex flex-col gap-3">
-                {process.env.NEXT_PUBLIC_DEMO_ONLY === "true" ? (
-                  <div
-                    className={`flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold ${
-                      isDark
-                        ? "bg-white/15 text-white/40"
-                        : "bg-gray-200 text-gray-400"
-                    }`}
-                  >
-                    use my chat
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                      isDark ? "bg-white/10 text-white/50" : "bg-gray-300 text-gray-500"
-                    }`}>
-                      coming soon
-                    </span>
-                  </div>
-                ) : (
-                  <Link
-                    href="/game"
-                    className={`flex w-full items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition active:scale-95 ${
-                      isDark
-                        ? "bg-white text-[#151518] hover:bg-white/90"
-                        : "bg-[#0A84FF] text-white hover:bg-[#0070E0]"
-                    }`}
-                  >
-                    use my chat
-                  </Link>
-                )}
+                {/* demo-prod branch: "use my chat" is always disabled */}
+                <div
+                  className={`flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold ${
+                    isDark
+                      ? "bg-white/15 text-white/40"
+                      : "bg-gray-200 text-gray-400"
+                  }`}
+                >
+                  use my chat
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                    isDark ? "bg-white/10 text-white/50" : "bg-gray-300 text-gray-500"
+                  }`}>
+                    coming soon
+                  </span>
+                </div>
                 <Link
                   href="/demo"
                   className={`text-center text-sm transition ${

@@ -18,15 +18,11 @@ const parseOptionalInt = (value: string | null): number | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-const DEMO_ONLY = process.env.DEMO_ONLY === "true";
-
-const parseMode = (value: string | null): DatasetMode => {
-  if (DEMO_ONLY) return "sample";
-  return value === "sample" ? "sample" : "main";
-};
+// demo-prod branch: always use sample mode regardless of query param.
+const parseMode = (): DatasetMode => "sample";
 
 export async function GET(request: NextRequest) {
-  const mode = parseMode(request.nextUrl.searchParams.get("mode"));
+  const mode = parseMode();
   const healthError = getDatasetHealth(mode);
   if (healthError) {
     return NextResponse.json(
